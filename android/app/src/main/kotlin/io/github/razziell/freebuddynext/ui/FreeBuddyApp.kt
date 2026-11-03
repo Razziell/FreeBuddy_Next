@@ -6,11 +6,15 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -181,6 +185,8 @@ import kotlin.math.hypot
 import kotlin.math.max
 import io.github.razziell.freebuddynext.bluetooth.ConnectionState
 import io.github.razziell.freebuddynext.bluetooth.HeadphonesRepository
+import io.github.razziell.freebuddynext.bluetooth.LowBatteryAlertSettings
+import io.github.razziell.freebuddynext.bluetooth.LowBatteryNotifier
 import io.github.razziell.freebuddynext.protocol.productionDate
 import io.github.razziell.freebuddynext.protocol.toggleHoldMode
 import io.github.razziell.freebuddynext.protocol.SerialComponent
@@ -397,6 +403,7 @@ fun FreeBuddyApp(repository: HeadphonesRepository, requestBluetoothPermission: (
                             when (current) {
                                 Screen.ABOUT -> AboutScreen(
                                     activeIdentity = activeIdentity,
+                                    repository = repository,
                                     openInterfaceEditor = {
                                         lastSettingsScreen = Screen.INTERFACE_EDITOR
                                         screen = Screen.INTERFACE_EDITOR
@@ -3080,16 +3087,64 @@ private fun LayoutSlider(
 @Composable
 private fun AboutScreen(
     activeIdentity: HeadphonesIdentity?,
+    repository: HeadphonesRepository,
     openInterfaceEditor: () -> Unit,
     back: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val themeMode by remember { ThemeStore.themeMode(context) }
         .collectAsStateWithLifecycle(initialValue = ThemeStore.ThemeMode.SYSTEM)
     // Reuse the value already collected at the application UI root. Starting a second
     // DataStore collection here with `true` caused the switch to flash on every entry.
     val showEmojis = LocalShowEmojis.current
+    val lowBatterySettings by remember { ThemeStore.lowBatteryAlertSettings(context) }
+        .collectAsStateWithLifecycle(initialValue = LowBatteryAlertSettings())
+    var notificationsAllowed by remember {
+        mutableStateOf(LowBatteryNotifier.hasNotificationPermission(context))
+    }
+    var pendingTestNotification by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notificationsAllowed = LowBatteryNotifier.hasNotificationPermission(context)
+                if (pendingTestNotification && notificationsAllowed) {
+                    pendingTestNotification = false
+                    repository.sendTestLowBatteryNotification(lowBatterySettings)
+                } else {
+                    repository.recheckLowBatteryAlert()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        notificationsAllowed = LowBatteryNotifier.hasNotificationPermission(context)
+        if (pendingTestNotification && notificationsAllowed) {
+            pendingTestNotification = false
+            repository.sendTestLowBatteryNotification(lowBatterySettings)
+        } else {
+            pendingTestNotification = false
+            repository.recheckLowBatteryAlert()
+        }
+    }
+    fun requestNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+            runCatching { context.startActivity(intent) }
+        }
+    }
     val lastIdentity by remember { ThemeStore.lastHeadphonesIdentity(context) }
         .collectAsStateWithLifecycle(initialValue = HeadphonesIdentity("freebuds_5i"))
     val colorIdentity = activeIdentity ?: lastIdentity
@@ -3139,6 +3194,169 @@ private fun AboutScreen(
                     Text(stringResource(R.string.companion_title), style = MaterialTheme.typography.bodyLarge)
                     Text(stringResource(R.string.companion_summary), style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Card(Modifier.fillMaxWidth(), shape = AppCardShape) {
+                Column {
+                    SettingSwitch(
+                        label = stringResource(R.string.low_battery_alert_title),
+                        checked = lowBatterySettings.enabled,
+                        description = stringResource(R.string.low_battery_alert_description),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    ) { enabled ->
+                        if (enabled && !notificationsAllowed && Build.VERSION.SDK_INT >= 33 &&
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS,
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        scope.launch {
+                            ThemeStore.setLowBatteryAlertSettings(
+                                context,
+                                lowBatterySettings.copy(enabled = enabled),
+                            )
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = lowBatterySettings.enabled,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
+                        Column(
+                            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            if (!notificationsAllowed) {
+                                Text(
+                                    stringResource(R.string.low_battery_permission_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                AppActionButton(
+                                    onClick = ::requestNotifications,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(stringResource(R.string.low_battery_permission_action))
+                                }
+                            }
+                            HorizontalDivider()
+                            SettingSwitch(
+                                label = stringResource(R.string.low_battery_left_toggle),
+                                checked = lowBatterySettings.leftEnabled,
+                            ) { enabled ->
+                                scope.launch {
+                                    ThemeStore.setLowBatteryAlertSettings(
+                                        context,
+                                        lowBatterySettings.copy(leftEnabled = enabled),
+                                    )
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = lowBatterySettings.leftEnabled,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                LayoutSlider(
+                                    label = stringResource(R.string.low_battery_left_threshold),
+                                    value = lowBatterySettings.leftThresholdPercent,
+                                    defaultValue = LowBatteryAlertSettings.DEFAULT_THRESHOLD_PERCENT,
+                                    range = LowBatteryAlertSettings.MIN_THRESHOLD_PERCENT..LowBatteryAlertSettings.MAX_THRESHOLD_PERCENT,
+                                    step = LowBatteryAlertSettings.STEP_PERCENT,
+                                    suffix = "%",
+                                    onValue = { percent ->
+                                        scope.launch {
+                                            ThemeStore.setLowBatteryAlertSettings(
+                                                context,
+                                                lowBatterySettings.copy(leftThresholdPercent = percent),
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                            HorizontalDivider()
+                            SettingSwitch(
+                                label = stringResource(R.string.low_battery_right_toggle),
+                                checked = lowBatterySettings.rightEnabled,
+                            ) { enabled ->
+                                scope.launch {
+                                    ThemeStore.setLowBatteryAlertSettings(
+                                        context,
+                                        lowBatterySettings.copy(rightEnabled = enabled),
+                                    )
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = lowBatterySettings.rightEnabled,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                LayoutSlider(
+                                    label = stringResource(R.string.low_battery_right_threshold),
+                                    value = lowBatterySettings.rightThresholdPercent,
+                                    defaultValue = LowBatteryAlertSettings.DEFAULT_THRESHOLD_PERCENT,
+                                    range = LowBatteryAlertSettings.MIN_THRESHOLD_PERCENT..LowBatteryAlertSettings.MAX_THRESHOLD_PERCENT,
+                                    step = LowBatteryAlertSettings.STEP_PERCENT,
+                                    suffix = "%",
+                                    onValue = { percent ->
+                                        scope.launch {
+                                            ThemeStore.setLowBatteryAlertSettings(
+                                                context,
+                                                lowBatterySettings.copy(rightThresholdPercent = percent),
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                            HorizontalDivider()
+                            SettingSwitch(
+                                label = stringResource(R.string.low_battery_case_toggle),
+                                checked = lowBatterySettings.caseEnabled,
+                            ) { enabled ->
+                                scope.launch {
+                                    ThemeStore.setLowBatteryAlertSettings(
+                                        context,
+                                        lowBatterySettings.copy(caseEnabled = enabled),
+                                    )
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = lowBatterySettings.caseEnabled,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut(),
+                            ) {
+                                LayoutSlider(
+                                    label = stringResource(R.string.low_battery_case_threshold),
+                                    value = lowBatterySettings.caseThresholdPercent,
+                                    defaultValue = LowBatteryAlertSettings.DEFAULT_THRESHOLD_PERCENT,
+                                    range = LowBatteryAlertSettings.MIN_THRESHOLD_PERCENT..LowBatteryAlertSettings.MAX_THRESHOLD_PERCENT,
+                                    step = LowBatteryAlertSettings.STEP_PERCENT,
+                                    suffix = "%",
+                                    onValue = { percent ->
+                                        scope.launch {
+                                            ThemeStore.setLowBatteryAlertSettings(
+                                                context,
+                                                lowBatterySettings.copy(caseThresholdPercent = percent),
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                            HorizontalDivider()
+                            AppActionButton(
+                                onClick = {
+                                    if (!repository.sendTestLowBatteryNotification(lowBatterySettings)) {
+                                        pendingTestNotification = true
+                                        requestNotifications()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(stringResource(R.string.low_battery_test_action))
+                            }
+                        }
+                    }
                 }
             }
             Text(

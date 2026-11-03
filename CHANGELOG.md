@@ -4,6 +4,8 @@ This file is maintained in English first, followed by a complete Russian transla
 
 ## [Unreleased]
 
+- Updated application version to 0.4.6+56. Added configurable low-battery notifications with independent thresholds for the left earbud, right earbud and charging case (5–80% in 5% steps), a test notification action, duplicate-alert suppression and settings backup support. Synchronized connection/disconnection transitions and optimized MBB stream parsing, widget fallback caching and bitmap LRU caching.
+
 - Updated application version to 0.4.5+55. Unified action-button feedback, refined the color picker, and separated Copy logs from Copy raw data. Unknown protocol fields are collapsed by default.
 
 - Renamed About to Settings and added an App operation heading. Added a Backup section, moving layout import/export out of the editor and extending JSON backups with widget color modes/RGB, opacity, labels and shared favorites. Legacy layout files remain supported; widget profiles map by type/creation order and are retained for recreated widgets.
@@ -298,6 +300,8 @@ This file is maintained in English first, followed by a complete Russian transla
 Сначала в этом файле приводится английская версия, ниже — её полный русский перевод.
 
 ## [Не выпущено]
+
+- Версия приложения обновлена до 0.4.6+56. Добавлены настраиваемые уведомления о низком заряде отдельно для левого наушника, правого наушника и зарядного кейса (порог 5–80% с шагом 5%), кнопка тестового уведомления, защита от повторных срабатываний и сохранение в резервной копии. Синхронизированы переходы подключения/отключения, оптимизированы парсер MBB-потока, кэш профилей виджетов и LRU-кэш битмапов.
 
 - Версия приложения обновлена до 0.4.5+55. Унифицированы кнопки и анимации нажатия, доработан пикер цветов. Копирование логов отделено от сырых данных; неизвестные поля протокола по умолчанию свёрнуты.
 

@@ -55,8 +55,12 @@ internal fun BackupSettingsSection() {
             try {
                 withContext(Dispatchers.IO) {
                     // Read at export time, not from an initial Compose placeholder layout.
-                    val backup = SettingsBackup(ThemeStore.interfaceLayout(context).first(),
-                        WidgetBackupStore.capture(context), WidgetBackupStore.favorites(context))
+                    val backup = SettingsBackup(
+                        ThemeStore.interfaceLayout(context).first(),
+                        WidgetBackupStore.capture(context),
+                        WidgetBackupStore.favorites(context),
+                        ThemeStore.lowBatteryAlertSettings(context).first(),
+                    )
                     val json = SettingsBackupCodec.encode(backup)
                     requireNotNull(context.contentResolver.openOutputStream(uri, "wt"))
                         .bufferedWriter(Charsets.UTF_8).use { it.write(json) }
@@ -130,6 +134,7 @@ internal fun BackupSettingsSection() {
                             withContext(Dispatchers.IO) {
                                 ThemeStore.setInterfaceLayout(context, backup.layout)
                                 backup.widgets?.let { WidgetBackupStore.restore(context, it, requireNotNull(backup.favorites)) }
+                                backup.lowBatteryAlert?.let { ThemeStore.setLowBatteryAlertSettings(context, it) }
                             }
                             pendingJson = null
                             // Persistence succeeded; report publication failure separately.

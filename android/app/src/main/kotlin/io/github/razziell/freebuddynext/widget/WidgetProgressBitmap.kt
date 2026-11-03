@@ -24,9 +24,14 @@ object WidgetProgressBitmap {
         return (color and 0x00FFFFFF) or (alpha shl 24)
     }
 
+    private const val MAX_CACHE_ENTRIES = 64
+
     // One widget draws 3 bars and often 2+ of them share the same level
-    // (e.g. both buds at 100%); reuse identical bitmaps within one update.
-    private val cache = HashMap<CacheKey, Bitmap>()
+    // (e.g. both buds at 100%); reuse identical bitmaps with LRU eviction.
+    private val cache = object : LinkedHashMap<CacheKey, Bitmap>(MAX_CACHE_ENTRIES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<CacheKey, Bitmap>?): Boolean =
+            size > MAX_CACHE_ENTRIES
+    }
 
     private data class CacheKey(
         val level: Int?,
@@ -53,9 +58,6 @@ object WidgetProgressBitmap {
         vertical: Boolean,
         producer: () -> Bitmap,
     ): Bitmap {
-        // Levels are 0..100 plus null, colors change only with theme/wallpaper:
-        // the cache stays tiny, but cap it defensively anyway.
-        if (cache.size > 64) cache.clear()
         return cache.getOrPut(CacheKey(level, filled, empty, vertical), producer)
     }
 

@@ -209,4 +209,22 @@
     <string name="interface_editor_hide">Hide item</string>
     <string name="interface_editor_show">Show item</string>
     <string name="active_codec">Active audio codec: %1$s</string>
+    <string name="low_battery_alert_title">Low battery notification</string>
+    <string name="low_battery_alert_description">Notify when an earbud or the charging case drops to or below the selected threshold</string>
+    <string name="low_battery_left_toggle">Left earbud</string>
+    <string name="low_battery_left_threshold">Left earbud threshold</string>
+    <string name="low_battery_right_toggle">Right earbud</string>
+    <string name="low_battery_right_threshold">Right earbud threshold</string>
+    <string name="low_battery_case_toggle">Charging case</string>
+    <string name="low_battery_case_threshold">Case threshold</string>
+    <string name="low_battery_test_action">Test notification</string>
+    <string name="low_battery_permission_hint">Allow notifications so the app can alert you when battery is low.</string>
+    <string name="low_battery_permission_action">Allow notifications</string>
+    <string name="low_battery_channel_name">Low battery alerts</string>
+    <string name="low_battery_channel_description">Notifications when earbuds or the charging case reach a low battery level</string>
+    <string name="low_battery_notification_title">Low headphones battery</string>
+    <string name="low_battery_notification_title_device">Low battery · %1$s</string>
+    <string name="low_battery_item_left">Left: %1$d%%</string>
+    <string name="low_battery_item_right">Right: %1$d%%</string>
+    <string name="low_battery_item_case">Case: %1$d%%</string>
 </resources>

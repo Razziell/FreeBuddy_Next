@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import io.github.razziell.freebuddynext.bluetooth.LowBatteryAlertSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -65,6 +67,13 @@ object ThemeStore {
 
     private val KEY = stringPreferencesKey("theme_mode")
     private val SHOW_EMOJIS = booleanPreferencesKey("show_emojis")
+    private val LOW_BATTERY_ENABLED = booleanPreferencesKey("low_battery_alert_enabled")
+    private val LOW_BATTERY_LEFT_ENABLED = booleanPreferencesKey("low_battery_left_enabled")
+    private val LOW_BATTERY_LEFT_THRESHOLD = intPreferencesKey("low_battery_left_threshold")
+    private val LOW_BATTERY_RIGHT_ENABLED = booleanPreferencesKey("low_battery_right_enabled")
+    private val LOW_BATTERY_RIGHT_THRESHOLD = intPreferencesKey("low_battery_right_threshold")
+    private val LOW_BATTERY_CASE_ENABLED = booleanPreferencesKey("low_battery_case_enabled")
+    private val LOW_BATTERY_CASE_THRESHOLD = intPreferencesKey("low_battery_case_threshold")
 
     // Legacy global keys (pre-0.3.4). Kept only as migration sources for 5i.
     private val LEGACY_FORCE_HEADPHONES_COLOR = booleanPreferencesKey("force_headphones_color")
@@ -88,6 +97,38 @@ object ThemeStore {
 
     suspend fun setShowEmojis(context: Context, show: Boolean) {
         context.themeDataStore.edit { it[SHOW_EMOJIS] = show }
+    }
+
+    fun lowBatteryAlertSettings(context: Context): Flow<LowBatteryAlertSettings> =
+        context.themeDataStore.data.map { prefs ->
+            LowBatteryAlertSettings(
+                enabled = prefs[LOW_BATTERY_ENABLED] ?: false,
+                leftEnabled = prefs[LOW_BATTERY_LEFT_ENABLED] ?: true,
+                leftThresholdPercent = LowBatteryAlertSettings.normalizeThreshold(
+                    prefs[LOW_BATTERY_LEFT_THRESHOLD] ?: LowBatteryAlertSettings.DEFAULT_THRESHOLD_PERCENT,
+                ),
+                rightEnabled = prefs[LOW_BATTERY_RIGHT_ENABLED] ?: true,
+                rightThresholdPercent = LowBatteryAlertSettings.normalizeThreshold(
+                    prefs[LOW_BATTERY_RIGHT_THRESHOLD] ?: LowBatteryAlertSettings.DEFAULT_THRESHOLD_PERCENT,
+                ),
+                caseEnabled = prefs[LOW_BATTERY_CASE_ENABLED] ?: true,
+                caseThresholdPercent = LowBatteryAlertSettings.normalizeThreshold(
+                    prefs[LOW_BATTERY_CASE_THRESHOLD] ?: LowBatteryAlertSettings.DEFAULT_THRESHOLD_PERCENT,
+                ),
+            )
+        }
+
+    suspend fun setLowBatteryAlertSettings(context: Context, settings: LowBatteryAlertSettings) {
+        val normalized = settings.normalized()
+        context.themeDataStore.edit { prefs ->
+            prefs[LOW_BATTERY_ENABLED] = normalized.enabled
+            prefs[LOW_BATTERY_LEFT_ENABLED] = normalized.leftEnabled
+            prefs[LOW_BATTERY_LEFT_THRESHOLD] = normalized.leftThresholdPercent
+            prefs[LOW_BATTERY_RIGHT_ENABLED] = normalized.rightEnabled
+            prefs[LOW_BATTERY_RIGHT_THRESHOLD] = normalized.rightThresholdPercent
+            prefs[LOW_BATTERY_CASE_ENABLED] = normalized.caseEnabled
+            prefs[LOW_BATTERY_CASE_THRESHOLD] = normalized.caseThresholdPercent
+        }
     }
 
     /** Effective per-device setting: serial -> remembered MAC mapping -> MAC -> model -> legacy. */

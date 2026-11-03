@@ -209,4 +209,22 @@
     <string name="interface_editor_hide">Element ausblenden</string>
     <string name="interface_editor_show">Element anzeigen</string>
     <string name="active_codec">Aktiver Audio-Codec: %1$s</string>
+    <string name="low_battery_alert_title">Benachrichtigung bei niedrigem Akkustand</string>
+    <string name="low_battery_alert_description">Benachrichtigen, wenn ein Ohrhörer oder das Ladecase den gewählten Schwellenwert erreicht oder unterschreitet</string>
+    <string name="low_battery_left_toggle">Linker Ohrhörer</string>
+    <string name="low_battery_left_threshold">Schwellenwert für linken Ohrhörer</string>
+    <string name="low_battery_right_toggle">Rechter Ohrhörer</string>
+    <string name="low_battery_right_threshold">Schwellenwert für rechten Ohrhörer</string>
+    <string name="low_battery_case_toggle">Ladecase</string>
+    <string name="low_battery_case_threshold">Schwellenwert für Ladecase</string>
+    <string name="low_battery_test_action">Benachrichtigung testen</string>
+    <string name="low_battery_permission_hint">Erlaube Benachrichtigungen, damit die App bei niedrigem Akkustand warnen kann.</string>
+    <string name="low_battery_permission_action">Benachrichtigungen erlauben</string>
+    <string name="low_battery_channel_name">Niedriger Akkustand</string>
+    <string name="low_battery_channel_description">Benachrichtigungen bei niedrigem Akkustand der Ohrhörer oder des Ladecases</string>
+    <string name="low_battery_notification_title">Niedriger Kopfhörer-Akkustand</string>
+    <string name="low_battery_notification_title_device">Niedriger Akkustand · %1$s</string>
+    <string name="low_battery_item_left">Links: %1$d%%</string>
+    <string name="low_battery_item_right">Rechts: %1$d%%</string>
+    <string name="low_battery_item_case">Case: %1$d%%</string>
 </resources>

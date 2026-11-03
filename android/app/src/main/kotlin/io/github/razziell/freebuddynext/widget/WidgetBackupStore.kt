@@ -18,14 +18,21 @@ internal object WidgetBackupStore {
         "anc" to AncWidgetReceiver::class.java,
     )
 
+    @Volatile private var cachedProfiles: List<WidgetAppearanceBackup>? = null
+
     private fun ids(context: Context, type: String): List<Int> =
         AppWidgetManager.getInstance(context)
             .getAppWidgetIds(ComponentName(context, providers.getValue(type))).sorted()
 
+    @Synchronized
     private fun saved(context: Context): List<WidgetAppearanceBackup> {
+        cachedProfiles?.let { return it }
         val json = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(PROFILES, null)
-            ?: return emptyList()
-        return runCatching { SettingsBackupCodec.decodeWidgets(JSONArray(json)) }.getOrDefault(emptyList())
+            ?: return emptyList<WidgetAppearanceBackup>().also { cachedProfiles = it }
+        val parsed = runCatching { SettingsBackupCodec.decodeWidgets(JSONArray(json)) }
+            .getOrDefault(emptyList())
+        cachedProfiles = parsed
+        return parsed
     }
 
     /** Defaults for new widgets after restore. Explicit per-instance settings always win. */
@@ -58,6 +65,7 @@ internal object WidgetBackupStore {
         require(favorites == WidgetFavoriteColors.normalize(favorites))
         check(context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
             .putString(PROFILES, json.toString()).commit()) { "Cannot save widget profiles" }
+        synchronized(this) { cachedProfiles = profiles }
         providers.keys.forEach { type ->
             ids(context, type).zip(profiles.filter { it.type == type }).forEach { (id, item) ->
                 WidgetStorage.writeColors(context, id, item.colors)

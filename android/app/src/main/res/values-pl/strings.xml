@@ -209,4 +209,22 @@
     <string name="interface_editor_hide">Ukryj element</string>
     <string name="interface_editor_show">Pokaż element</string>
     <string name="active_codec">Aktywny kodek audio: %1$s</string>
+    <string name="low_battery_alert_title">Powiadomienie o niskim poziomie baterii</string>
+    <string name="low_battery_alert_description">Powiadamiaj, gdy poziom baterii słuchawki lub etui spadnie do wybranego progu lub poniżej</string>
+    <string name="low_battery_left_toggle">Lewa słuchawka</string>
+    <string name="low_battery_left_threshold">Próg dla lewej słuchawki</string>
+    <string name="low_battery_right_toggle">Prawa słuchawka</string>
+    <string name="low_battery_right_threshold">Próg dla prawej słuchawki</string>
+    <string name="low_battery_case_toggle">Etui ładujące</string>
+    <string name="low_battery_case_threshold">Próg dla etui</string>
+    <string name="low_battery_test_action">Testuj powiadomienie</string>
+    <string name="low_battery_permission_hint">Zezwól na powiadomienia, aby aplikacja mogła ostrzegać o niskim poziomie baterii.</string>
+    <string name="low_battery_permission_action">Zezwól na powiadomienia</string>
+    <string name="low_battery_channel_name">Niski poziom baterii</string>
+    <string name="low_battery_channel_description">Powiadomienia o niskim poziomie baterii słuchawek i etui ładującego</string>
+    <string name="low_battery_notification_title">Niski poziom baterii słuchawek</string>
+    <string name="low_battery_notification_title_device">Niski poziom baterii · %1$s</string>
+    <string name="low_battery_item_left">Lewa: %1$d%%</string>
+    <string name="low_battery_item_right">Prawa: %1$d%%</string>
+    <string name="low_battery_item_case">Etui: %1$d%%</string>
 </resources>

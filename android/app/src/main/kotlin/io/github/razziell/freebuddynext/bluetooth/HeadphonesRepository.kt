@@ -50,6 +50,7 @@ import io.github.razziell.freebuddynext.protocol.Swipe
 import io.github.razziell.freebuddynext.protocol.TripleTap
 import io.github.razziell.freebuddynext.protocol.toDiagnosticString
 import io.github.razziell.freebuddynext.protocol.validHoldModesOrDefault
+import io.github.razziell.freebuddynext.data.ThemeStore
 import io.github.razziell.freebuddynext.widget.WidgetStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +60,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -102,7 +104,8 @@ class HeadphonesRepository(private val context: Context) {
     @Volatile private var activeDevice: BluetoothDevice? = null
     @Volatile private var activeProtocol: HeadphonesProtocol? = null
     @Volatile private var connectJob: Job? = null
-    private var livenessJob: Job? = null
+    @Volatile private var livenessJob: Job? = null
+    @Volatile private var lowBatterySettings = LowBatteryAlertSettings()
     private var receiverRegistered = false
     private val codecPreferences = context.getSharedPreferences(
         BluetoothCodecNames.CACHE_PREFERENCES,
@@ -246,6 +249,14 @@ class HeadphonesRepository(private val context: Context) {
                     }
                 }
                 if (widgetsDirty) WidgetStorage.requestDataUpdate(context)
+                if (snapshot != null && (batteryChanged || batteryReport)) {
+                    try {
+                        LowBatteryNotifier.onSettingsOrBatteryUpdated(context, lowBatterySettings, snapshot)
+                    } catch (cancel: CancellationException) {
+                        throw cancel
+                    } catch (_: Exception) {
+                    }
+                }
                 activeProtocol?.takeIf { it.isDualConnectChangeEvent(command) }?.let { protocol ->
                     protocol.module<DualConnectModule>()?.let { send(it.stateRequest()) }
                     refreshDualConnectDevices()
@@ -265,6 +276,32 @@ class HeadphonesRepository(private val context: Context) {
                 refresh()
             }
         }
+        scope.launch {
+            ThemeStore.lowBatteryAlertSettings(context).collect { alertSettings ->
+                lowBatterySettings = alertSettings
+                val snapshot = (_state.value as? ConnectionState.Connected)?.snapshot
+                LowBatteryNotifier.onSettingsOrBatteryUpdated(context, alertSettings, snapshot)
+            }
+        }
+    }
+
+    fun recheckLowBatteryAlert() {
+        scope.launch {
+            try {
+                val alertSettings = ThemeStore.lowBatteryAlertSettings(context).first()
+                lowBatterySettings = alertSettings
+                val snapshot = (_state.value as? ConnectionState.Connected)?.snapshot
+                LowBatteryNotifier.onSettingsOrBatteryUpdated(context, alertSettings, snapshot)
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun sendTestLowBatteryNotification(settings: LowBatteryAlertSettings): Boolean {
+        val snapshot = (_state.value as? ConnectionState.Connected)?.snapshot
+        return LowBatteryNotifier.sendTestNotification(context, settings, snapshot)
     }
 
     fun start() {
@@ -486,16 +523,33 @@ class HeadphonesRepository(private val context: Context) {
                 _state.value = ConnectionState.Connecting(name)
                 runCatching {
                     client.connect(device, protocol.sppUuid)
-                    activeDevice = device
-                    activeProtocol = protocol
-                    widgetReports.update { it.nextSession() }
-                    _state.value = ConnectionState.Connected(
-                        HeadphonesSnapshot(
-                            protocolId = protocol.id,
-                            name = name,
-                            address = device.address,
-                        )
-                    )
+                    val established = connectionMutex.withLock {
+                        val currentJob = currentCoroutineContext()[Job]
+                        val stillConnected = a2dp?.getConnectionState(device) == BluetoothProfile.STATE_CONNECTED
+                        if (connectJob !== currentJob || !stillConnected) {
+                            false
+                        } else {
+                            activeDevice = device
+                            activeProtocol = protocol
+                            widgetReports.update { it.nextSession() }
+                            _state.value = ConnectionState.Connected(
+                                HeadphonesSnapshot(
+                                    protocolId = protocol.id,
+                                    name = name,
+                                    address = device.address,
+                                ),
+                            )
+                            true
+                        }
+                    }
+                    if (!established) {
+                        client.close()
+                        if (_state.value is ConnectionState.Connecting) {
+                            _state.value = ConnectionState.Disconnected(pairedSupportedNames())
+                        }
+                        return@launch
+                    }
+                    ensureActive()
                     BackgroundDiagnostics.record(context, "rfcomm connected")
                     WidgetStorage.saveAncAndUpdate(context, mode = null, connected = true)
                     // MBB pushes updates on its own (battery 1/39, ANC 43/42,
@@ -600,17 +654,20 @@ class HeadphonesRepository(private val context: Context) {
         // liveness-detected drop); cancelling the calling job would make the
         // follow-up refresh() throw CancellationException and skip silently.
         val self = currentCoroutineContext()[Job]
-        livenessJob?.takeIf { it !== self }?.cancel()
-        livenessJob = null
-        connectJob?.takeIf { it !== self }?.cancel()
-        connectJob = null
-        val findModule = activeProtocol?.module<FindEarbudsModule>()
-        val findState = (_state.value as? ConnectionState.Connected)?.snapshot?.findEarbuds
-        activeDevice = null
-        activeProtocol = null
-        widgetReports.update { it.nextSession() }
-        _activeCodec.value = null
-        synchronized(diagnosticLog) { diagnosticLog.clear() }
+        val (findModule, findState) = connectionMutex.withLock {
+            livenessJob?.takeIf { it !== self }?.cancel()
+            livenessJob = null
+            connectJob?.takeIf { it !== self }?.cancel()
+            connectJob = null
+            val module = activeProtocol?.module<FindEarbudsModule>()
+            val state = (_state.value as? ConnectionState.Connected)?.snapshot?.findEarbuds
+            activeDevice = null
+            activeProtocol = null
+            widgetReports.update { it.nextSession() }
+            _activeCodec.value = null
+            synchronized(diagnosticLog) { diagnosticLog.clear() }
+            module to state
+        }
         withContext(NonCancellable) {
             if (findModule != null && findState != null) {
                 if (findState.leftSounding) runCatching {
@@ -883,11 +940,9 @@ class HeadphonesRepository(private val context: Context) {
     private fun send(command: MbbCommand) { scope.launch { runCatching { client.send(command) } } }
     private fun sendAndRefreshDual(command: MbbCommand) {
         scope.launch {
-            runCatching {
-                client.send(command)
-                delay(500)
-                refreshDualConnectDevices()
-            }
+            runCatching { client.send(command) }
+            delay(500)
+            refreshDualConnectDevices()
         }
     }
     private fun sendAndRefresh(
@@ -896,11 +951,9 @@ class HeadphonesRepository(private val context: Context) {
         refreshDelayMs: Long = 250,
     ) {
         scope.launch {
-            runCatching {
-                client.send(command)
-                delay(refreshDelayMs)
-                client.send(refresh)
-            }
+            runCatching { client.send(command) }
+            delay(refreshDelayMs)
+            runCatching { client.send(refresh) }
         }
     }
 

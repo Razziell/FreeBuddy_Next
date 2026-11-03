@@ -1,5 +1,6 @@
 package io.github.razziell.freebuddynext.data
 
+import io.github.razziell.freebuddynext.bluetooth.LowBatteryAlertSettings
 import io.github.razziell.freebuddynext.widget.WidgetColorHex
 import io.github.razziell.freebuddynext.widget.WidgetColors
 import org.json.JSONArray
@@ -105,6 +106,28 @@ class SettingsBackupTest {
         for (key in listOf("layout", "widgets", "favorites")) {
             val root = json().apply { remove(key) }
             assertThrows(Exception::class.java) { SettingsBackupCodec.decode(root.toString()) }
+        }
+    }
+
+    @Test fun `round trip preserves low battery alert settings and rejects invalid thresholds`() {
+        val withAlert = sample().copy(
+            lowBatteryAlert = LowBatteryAlertSettings(
+                enabled = true,
+                leftEnabled = true,
+                leftThresholdPercent = 15,
+                rightEnabled = true,
+                rightThresholdPercent = 45,
+                caseEnabled = false,
+                caseThresholdPercent = 30,
+            ),
+        )
+        assertEquals(withAlert, SettingsBackupCodec.decode(SettingsBackupCodec.encode(withAlert)))
+
+        val badStep = JSONObject(SettingsBackupCodec.encode(withAlert)).apply {
+            getJSONObject("lowBatteryAlert").put("leftThresholdPercent", 17)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SettingsBackupCodec.decode(badStep.toString())
         }
     }
 }

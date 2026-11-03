@@ -209,4 +209,22 @@
     <string name="interface_editor_hide">Скрыть пункт</string>
     <string name="interface_editor_show">Показать пункт</string>
     <string name="active_codec">Активный аудиокодек: %1$s</string>
+    <string name="low_battery_alert_title">Уведомление о низком заряде</string>
+    <string name="low_battery_alert_description">Уведомлять при разряде наушника или зарядного кейса до выбранного порога и ниже</string>
+    <string name="low_battery_left_toggle">Левый наушник</string>
+    <string name="low_battery_left_threshold">Порог для левого наушника</string>
+    <string name="low_battery_right_toggle">Правый наушник</string>
+    <string name="low_battery_right_threshold">Порог для правого наушника</string>
+    <string name="low_battery_case_toggle">Зарядный кейс</string>
+    <string name="low_battery_case_threshold">Порог для кейса</string>
+    <string name="low_battery_test_action">Тест уведомления</string>
+    <string name="low_battery_permission_hint">Разрешите уведомления, чтобы приложение могло предупреждать о низком заряде.</string>
+    <string name="low_battery_permission_action">Разрешить уведомления</string>
+    <string name="low_battery_channel_name">Низкий заряд</string>
+    <string name="low_battery_channel_description">Уведомления о низком заряде наушников и зарядного кейса</string>
+    <string name="low_battery_notification_title">Низкий заряд наушников</string>
+    <string name="low_battery_notification_title_device">Низкий заряд · %1$s</string>
+    <string name="low_battery_item_left">Левый: %1$d%%</string>
+    <string name="low_battery_item_right">Правый: %1$d%%</string>
+    <string name="low_battery_item_case">Кейс: %1$d%%</string>
 </resources>

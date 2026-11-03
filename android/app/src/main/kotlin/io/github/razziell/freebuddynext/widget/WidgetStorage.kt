@@ -89,10 +89,14 @@ object WidgetStorage {
     internal val TEXT_COLOR_MODE_KEY = intPreferencesKey("text_color_mode")
     internal val TEXT_RGB_KEY = intPreferencesKey("text_rgb")
 
-    internal fun readColors(context: Context, appWidgetId: Int): WidgetColors {
+    internal fun readColors(
+        context: Context,
+        appWidgetId: Int,
+        fallbackProfile: io.github.razziell.freebuddynext.data.WidgetAppearanceBackup? = null,
+    ): WidgetColors {
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val defaults = if (prefs.contains("background_color_mode_$appWidgetId")) WidgetColors()
-            else WidgetBackupStore.fallback(context, appWidgetId)?.colors ?: WidgetColors()
+            else (fallbackProfile ?: WidgetBackupStore.fallback(context, appWidgetId))?.colors ?: WidgetColors()
         return WidgetColors(
             WidgetColorMode.normalize(prefs.getInt("background_color_mode_$appWidgetId", defaults.backgroundMode)),
             WidgetColorHex.opaque(prefs.getInt("background_rgb_$appWidgetId", defaults.backgroundRgb)),
@@ -119,14 +123,25 @@ object WidgetStorage {
     }
 
     /** Outer widget container opacity for one instance, percent 0..100. */
-    fun readBackgroundOpacity(context: Context, appWidgetId: Int): Int =
-        readSplitOpacity(context, BACKGROUND_OPACITY_PREFIX, appWidgetId)
+    internal fun readBackgroundOpacity(
+        context: Context,
+        appWidgetId: Int,
+        fallbackProfile: io.github.razziell.freebuddynext.data.WidgetAppearanceBackup? = null,
+    ): Int = readSplitOpacity(context, BACKGROUND_OPACITY_PREFIX, appWidgetId, fallbackProfile)
 
     /** Progress bars and ANC button opacity, percent 0..100. */
-    fun readElementOpacity(context: Context, appWidgetId: Int): Int =
-        readSplitOpacity(context, ELEMENT_OPACITY_PREFIX, appWidgetId)
+    internal fun readElementOpacity(
+        context: Context,
+        appWidgetId: Int,
+        fallbackProfile: io.github.razziell.freebuddynext.data.WidgetAppearanceBackup? = null,
+    ): Int = readSplitOpacity(context, ELEMENT_OPACITY_PREFIX, appWidgetId, fallbackProfile)
 
-    private fun readSplitOpacity(context: Context, prefix: String, appWidgetId: Int): Int {
+    private fun readSplitOpacity(
+        context: Context,
+        prefix: String,
+        appWidgetId: Int,
+        fallbackProfile: io.github.razziell.freebuddynext.data.WidgetAppearanceBackup? = null,
+    ): Int {
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val key = prefix + appWidgetId
         // Existing widgets preserve their exact appearance: the old single
@@ -137,7 +152,7 @@ object WidgetStorage {
             if (prefs.contains(LEGACY_OPACITY_PREFIX + appWidgetId)) {
                 prefs.getInt(LEGACY_OPACITY_PREFIX + appWidgetId, DEFAULT_OPACITY)
             } else {
-                val profile = WidgetBackupStore.fallback(context, appWidgetId)
+                val profile = fallbackProfile ?: WidgetBackupStore.fallback(context, appWidgetId)
                 (if (prefix == BACKGROUND_OPACITY_PREFIX) profile?.backgroundOpacity else profile?.elementOpacity)
                     ?: DEFAULT_OPACITY
             }
@@ -157,11 +172,15 @@ object WidgetStorage {
             .apply()
     }
 
-    fun readLabelMode(context: Context, appWidgetId: Int): Int {
+    internal fun readLabelMode(
+        context: Context,
+        appWidgetId: Int,
+        fallbackProfile: io.github.razziell.freebuddynext.data.WidgetAppearanceBackup? = null,
+    ): Int {
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val key = LABEL_MODE_PREFIX + appWidgetId
         return (if (prefs.contains(key)) prefs.getInt(key, LABELS_FULL)
-            else WidgetBackupStore.fallback(context, appWidgetId)?.labelMode ?: LABELS_FULL)
+            else (fallbackProfile ?: WidgetBackupStore.fallback(context, appWidgetId))?.labelMode ?: LABELS_FULL)
             .coerceIn(LABELS_FULL, LABELS_HIDDEN)
     }
 
@@ -287,13 +306,19 @@ object WidgetStorage {
         val manager = GlanceAppWidgetManager(context)
         val (left, right, case) = read(context)
         val (ancMode, ancConnected) = readAnc(context)
+        val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         suspend fun push(widget: GlanceAppWidget, cls: Class<out GlanceAppWidget>) {
             manager.getGlanceIds(cls).forEach { id ->
                 val appWidgetId = runCatching { manager.getAppWidgetId(id) }.getOrDefault(0)
-                val backgroundOpacity = readBackgroundOpacity(context, appWidgetId)
-                val elementOpacity = readElementOpacity(context, appWidgetId)
-                val labelMode = readLabelMode(context, appWidgetId)
-                val colors = readColors(context, appWidgetId)
+                val needsFallback = !prefs.contains(BACKGROUND_OPACITY_PREFIX + appWidgetId) ||
+                    !prefs.contains(ELEMENT_OPACITY_PREFIX + appWidgetId) ||
+                    !prefs.contains(LABEL_MODE_PREFIX + appWidgetId) ||
+                    !prefs.contains("background_color_mode_$appWidgetId")
+                val fallbackProfile = if (needsFallback) WidgetBackupStore.fallback(context, appWidgetId) else null
+                val backgroundOpacity = readBackgroundOpacity(context, appWidgetId, fallbackProfile)
+                val elementOpacity = readElementOpacity(context, appWidgetId, fallbackProfile)
+                val labelMode = readLabelMode(context, appWidgetId, fallbackProfile)
+                val colors = readColors(context, appWidgetId, fallbackProfile)
                 updateAppWidgetState(context, id) { prefs ->
                     prefs[LEFT_KEY] = left
                     prefs[RIGHT_KEY] = right

@@ -135,7 +135,8 @@ On HyperOS, allow **Background autostart** and set the application's battery mod
   - show or hide optional blocks while keeping essential home-screen blocks visible;
   - scale the headphone image, battery rows and ANC buttons;
   - real component previews and reset to defaults.
-- **Settings → Backup** imports/exports `Settings_FBN.json`: interface layout plus per-widget background/element/text color modes and custom RGB, both opacity values, label modes, and the shared favorite-color palette. Import validates the complete file before confirmation. Legacy `Layout_FBN.json` files restore only layout, leaving widgets and favorites unchanged.
+- **Settings → App operation → Low battery notification** can alert when the left earbud, right earbud or charging case drops to or below its own threshold (5–80% in 5% steps), with duplicate-alert suppression while a component stays low or when a closed case temporarily stops reporting its level, plus a test notification action.
+- **Settings → Backup** imports/exports `Settings_FBN.json`: interface layout, low-battery alert settings, plus per-widget background/element/text color modes and custom RGB, both opacity values, label modes, and the shared favorite-color palette. Import validates the complete file before confirmation. Legacy `Layout_FBN.json` files restore only layout, leaving widgets and favorites unchanged.
 - Widget profiles are matched by provider type and ascending local widget ID (creation order), not screen position. Extra local instances remain unchanged. Profiles for widgets not yet recreated are retained as defaults for newly added instances of that type; backups never create or move launcher widgets and do not include Bluetooth associations or live battery data.
 - Material 3 Expressive-inspired motion and interactions:
   - animated screen transitions and circular container transforms;

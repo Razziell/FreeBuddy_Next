@@ -55,26 +55,42 @@ class MbbStreamParser {
     private var pending = ByteArray(0)
 
     fun append(bytes: ByteArray): List<MbbCommand> {
-        pending += bytes
+        if (bytes.isNotEmpty()) {
+            pending = if (pending.isEmpty()) bytes.copyOf() else pending + bytes
+        }
         val result = mutableListOf<MbbCommand>()
-        while (pending.size >= 3) {
-            val magicIndex = pending.indexOfFirst { it.u() == 0x5A }
+        var offset = 0
+        val end = pending.size
+        while (end - offset >= 3) {
+            var magicIndex = -1
+            for (i in offset until end) {
+                if (pending[i].u() == 0x5A) {
+                    magicIndex = i
+                    break
+                }
+            }
             if (magicIndex < 0) {
-                pending = ByteArray(0)
+                offset = end
                 break
             }
-            if (magicIndex > 0) pending = pending.copyOfRange(magicIndex, pending.size)
-            if (pending.size < 3) break
-            val packetLength = pending[2].u() + 5
+            offset = magicIndex
+            if (end - offset < 3) break
+            val packetLength = pending[offset + 2].u() + 5
             if (packetLength !in 8..260) {
-                pending = pending.copyOfRange(1, pending.size)
+                offset += 1
                 continue
             }
-            if (pending.size < packetLength) break
-            val packet = pending.copyOfRange(0, packetLength)
-            pending = pending.copyOfRange(packetLength, pending.size)
+            if (end - offset < packetLength) break
+            val packet = pending.copyOfRange(offset, offset + packetLength)
+            offset += packetLength
             runCatching { MbbCommand.parse(packet) }
                 .onSuccess { if (!(it.serviceId == 10 && it.commandId == 13)) result += it }
+        }
+        pending = when {
+            offset >= end -> ByteArray(0)
+            offset > 0 -> pending.copyOfRange(offset, end)
+            pending.size > 4096 -> pending.copyOfRange(pending.size - 260, pending.size)
+            else -> pending
         }
         return result
     }
